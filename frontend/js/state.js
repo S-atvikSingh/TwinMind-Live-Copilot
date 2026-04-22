@@ -1,3 +1,4 @@
+// state.js tracks the current state of the application
 window.AppState = {
   mediaRecorder: null,
   activeStream: null,
@@ -24,6 +25,7 @@ window.AppState = {
   PROMPT_DEBUG_LOG_MAX: 25
 };
 
+//Stores the default prompts, context windows etc.
 window.DefaultSettings = {
   tm_sugg_prompt:
     "You are a live meeting copilot. Return strictly JSON with key 'suggestions' containing exactly 3 objects. Each object must include: type, title, preview, reason. Make suggestions actionable and different from each other (mix of ask_question, talking_point, answer, fact_check, clarify). Keep title under 14 words and preview under 45 words.",

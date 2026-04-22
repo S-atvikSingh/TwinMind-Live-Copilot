@@ -1,3 +1,4 @@
+//context.js prepares data before it is sent to display/API
 window.getNumericSetting = function getNumericSetting(key, fallback) {
   const raw = parseInt(localStorage.getItem(key) || "", 10);
   return Number.isFinite(raw) && raw > 0 ? raw : fallback;
@@ -74,7 +75,7 @@ window.passesSuggestionQuality = function passesSuggestionQuality(batch) {
   if (!Array.isArray(batch) || batch.length !== 3) return false;
   const typeSet = new Set(batch.map((s) => (s.type || "").toLowerCase()));
   if (typeSet.size < 2) return false;
-  if (batch.some((s) => window.isGenericSuggestion(s))) return false;
+  if (batch.every((s) => window.isGenericSuggestion(s))) return false;
   const uniqueTitles = new Set(batch.map((s) => s.title.toLowerCase()));
   return uniqueTitles.size === 3;
 };

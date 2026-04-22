@@ -1,3 +1,4 @@
+// ui.js includes all parts which interact with UI. from rendering transcription to updating time and letency figures.
 window.UI = {
   micBtn: document.getElementById("micBtn"),
   micStatus: document.getElementById("micStatus"),

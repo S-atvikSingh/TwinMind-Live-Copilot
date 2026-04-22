@@ -53,20 +53,20 @@ def _parse_json_suggestions(content: str):
 
 def _validate_suggestion_quality(suggestions):
     if len(suggestions) != 3:
-        raise HTTPException(status_code=422, detail="Model did not return exactly 3 suggestions.")
+        raise HTTPException(status_code=422, detail="Model did not return exactly 3 suggestions.", scope="suggestions")
 
     type_count = len({s["type"] for s in suggestions})
     if type_count < 2:
-        raise HTTPException(status_code=422, detail="Suggestion types are not diverse enough.")
+        raise HTTPException(status_code=422, detail="Suggestion types are not diverse enough.", scope="suggestions")
 
     title_count = len({s["title"].lower() for s in suggestions})
     if title_count != 3:
-        raise HTTPException(status_code=422, detail="Suggestion titles are duplicated.")
+        raise HTTPException(status_code=422, detail="Suggestion titles are duplicated.", scope="suggestions")
 
     for suggestion in suggestions:
         text = f"{suggestion['title']} {suggestion['preview']}".lower()
         if any(marker in text for marker in GENERIC_MARKERS):
-            raise HTTPException(status_code=422, detail="Suggestions are too generic; regenerate.")
+            raise HTTPException(status_code=422, detail="Suggestions are too generic; regenerate.", scope="suggestions")
 
 @app.post("/transcribe")
 async def transcribe(audio: UploadFile = File(...), key: str = Form(...)):
@@ -95,7 +95,7 @@ async def transcribe(audio: UploadFile = File(...), key: str = Form(...)):
         raise HTTPException(status_code=429, detail="Groq rate limit reached.")
     except Exception as e:
         print(f"System Error: {e}") # Log full error for you
-        raise HTTPException(status_code=500, detail="Transcription service unavailable.")
+        raise HTTPException(status_code=500, detail="Transcription service unavailable.", scope="transcript")
 
 @app.post("/suggest")
 async def suggest(transcript: str = Form(...), prompt: str = Form(...), key: str = Form(...), sugg_context: str = Form(...)):
@@ -125,7 +125,7 @@ async def suggest(transcript: str = Form(...), prompt: str = Form(...), key: str
         raise HTTPException(status_code=429, detail="Groq rate limit reached.")
     except Exception as e:
         print(f"System Error: {e}") # Log full error for you
-        raise HTTPException(status_code=500, detail="Suggestion service unavailable.")
+        raise HTTPException(status_code=500, detail="Suggestion service unavailable.", scope="suggestions")
 
 @app.post("/chat")
 async def chat(question: str = Form(...), chat_context: str = Form(...), transcript: str = Form(...), prompt: str = Form(...), key: str = Form(...)):
@@ -151,7 +151,7 @@ async def chat(question: str = Form(...), chat_context: str = Form(...), transcr
         raise HTTPException(status_code=429, detail="Groq rate limit reached.")
     except Exception as e:
         print(f"System Error: {e}") # Log full error for you
-        raise HTTPException(status_code=500, detail="Chat service unavailable.")
+        raise HTTPException(status_code=500, detail="Chat service unavailable.", scope="chat")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

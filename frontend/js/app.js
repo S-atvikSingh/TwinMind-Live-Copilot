@@ -1,3 +1,4 @@
+//app.js handles all API calls to the backend
 window.ensureDefaultSettings();
 window.updateMetricsBar();
 

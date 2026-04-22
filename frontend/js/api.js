@@ -1,3 +1,4 @@
+// api.js handles all the fetch calls for errors etc.
 /**
  * @param {'all'|'transcript'|'suggestions'|'chat'} scope - which column(s) show the error
  */

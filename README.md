@@ -1,174 +1,135 @@
-# TwinMind Live Suggestions (Offline Local Version)
+# TwinMind Live Suggestions
 
-A local-first implementation of the TwinMind assessment:
-- live mic capture
-- rolling transcript updates
-- 3 live suggestions per refresh cycle
-- click-to-expand detailed answers in a session chat
-- full session export for evaluation
+Web app that captures microphone audio during a conversation, transcribes it in timed chunks, requests three live suggestions from a language model, and opens a right-hand chat for longer answers when the user clicks a card or types a question. Session data lives in the browser only until the page is closed or refreshed.
 
-This version is optimized for running and testing on a local machine.
+## Submission
 
-## Local Run
+Live URL:
 
-## 1) Backend
+## Stack
 
-```bash
-cd backend
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-python main.py
-```
+The frontend is **React** with **Vite**. The backend is **FastAPI** on Python. All model calls go through **Groq**: **whisper-large-v3** for transcription and **openai/gpt-oss-120b** for suggestions and chat, matching the assignment model line.
 
-Backend runs at `http://localhost:8000`.
+## Local setup
 
-## 2) Frontend
+Backend (from the `backend` directory): create a virtual environment, install dependencies with `pip install -r requirements.txt`, then run `python main.py`. The API listens on `http://localhost:8000` by default.
 
-Serve `frontend/index.html` from any static server (or open directly in browser if your environment allows mic + fetch to localhost).
+Frontend (from the `frontend` directory): run `npm install` and `npm run dev`. Open the URL Vite prints (typically `http://localhost:5173`). Paste your Groq API key in Settings before starting the microphone.
 
-Example:
+## Deployment
 
-```bash
-cd frontend
-python -m http.server 5500
-```
+Run the FastAPI app on a host that exposes HTTPS and note its origin for CORS (the backend allows all origins for this prototype). Build the frontend with `npm run build` and serve the `dist` folder. Set the environment variable `VITE_API_BASE` at build time to your public API origin (for example `https://api.example.com`) so the browser calls your deployed backend instead of `http://localhost:8000`.
 
-Then open `http://localhost:5500`.
+## Behavior
+
+Recording uses a **30 second** `MediaRecorder` cycle: each stop sends one WebM chunk to `/transcribe`, appends the returned text to the transcript column with auto-scroll, then calls `/suggest` so the middle column always reflects the latest text. **Reload suggestions** stops the current timer cycle early, transcribes the in-progress chunk, and runs the same suggest path. New suggestion batches are **prepended** so the freshest three cards stay at the top. Each card shows type, title, and a short preview; a click sends a structured question plus metadata to `/chat`. The chat column is one continuous thread for the session. **Export session** downloads JSON containing the full transcript, all suggestion batches with timestamps, chat turns, optional prompt debug entries, and rolling latency samples.
 
 ## Settings
 
-Use the settings modal (`⚙️`) and provide your own Groq API key.
+The Settings panel stores values in `localStorage`. The user supplies the Groq API key only here; it is never committed to the repo. Editable fields include the live suggestion system prompt, the typed chat system prompt, the detailed-answer prompt used when a suggestion is clicked, free-text context snippets prepended to suggestion and chat requests, character limits for the recent transcript slice used in suggestions versus chat, thresholds that control when older transcript is summarized into a short bullet list, and optional prompt debug export. Defaults ship in `frontend/src/App.jsx` as `DEFAULT_SETTINGS`.
 
-No API key is hard-coded in source. The key is stored in browser `localStorage` as `tm_key` for local testing only.
+## Prompt strategy
 
-Configurable values:
-- suggestions prompt
-- chat prompt
-- suggestions context guidance
-- chat context guidance
-- suggestion context window (`last N characters`)
-- chat context window (`last N characters`)
-- prompt debug toggle (shows latest payload used for suggest/chat)
+Suggestions use a strict JSON object response shape from Groq. The system message is the long assignment-style prompt (types, standalone previews, grounding). The user message sent by the backend combines the recent transcript window (last N characters, default 4000) with a structured context block built on the client: configurable timing guidance, a recency-biased excerpt, optional compressed older context when the session is long, the last two suggestion batches serialized so the model avoids repeating themes, and light heuristics (for example sequence or puzzle phrasing) that nudge toward concrete answers. The client may retry the suggest call up to four times until local quality checks pass (three items, at least two distinct types, three distinct titles). Chat requests send a similar recent window (default 7000 characters for chat) plus recency boost text, older summary when applicable, and for card clicks a block with the suggestion type, title, preview, and reason. Transcript text used in API calls is kept in a ref updated immediately after each transcribe response so the first suggestion batch after a chunk is never empty due to React state batching.
 
-The app also seeds default prompt/context values on first load.
+The backend parses JSON, normalizes types to the allowed set, trims lengths, and rejects responses that are not exactly three suggestions, that reuse titles, or that collapse to a single suggestion type, which triggers the client retry loop.
 
-## Stack Choices
+## Tradeoffs
 
-- Frontend: HTML + Tailwind CDN + vanilla JavaScript
-- Backend: FastAPI (`Python`)
-- Model provider: Groq
-  - Transcription: `whisper-large-v3`
-  - Suggestions: `openai/gpt-oss-120b`
-  - Chat: `openai/gpt-oss-120b`
+Fixed 30 second chunks balance Whisper cost and latency against how quickly the transcript moves; shorter chunks would react faster but multiply API calls. Client-side retries improve card quality without a second HTTP round-trip design, at the cost of worst-case latency when the model returns weak JSON. Older context is summarized heuristically rather than sent in full, which keeps prompts within limits but can drop nuance from early in a long session. Suggestion quality checks run on the client as well as basic validation on the server so the UI can degrade gracefully with a clear error if all attempts fail.
 
-Reasons:
-- I used vanilla JS because the project has only one page which can be quickly built and debugged with JS.
-- The groq models were used as required by the assignment
-- Backend was built with python as that is my language of choice.
+## Latency
 
-## Architecture + Tradeoff Diagram
+The header bar records the last, median, and mean round-trip times over the ten most recent calls each for transcribe, suggest, and chat. Coarse progress indicators in each column reserve vertical space so status text does not shift the layout when states change.
+
+## UI
+
+![twinMinds Copilot by Satvik](image.png)
+
+## Repository layout
+
+| Path | Role |
+| --- | --- |
+| `frontend/src/App.jsx` | UI, mic loop, prompts, export, API orchestration |
+| `frontend/src/main.jsx` | React entry |
+| `frontend/src/styles.css` | Three-column layout and fixed status regions |
+| `frontend/vite.config.js` | Vite configuration |
+| `backend/main.py` | `/transcribe`, `/suggest`, `/chat` routes and Groq integration |
+
+## Diagrams
+
+```mermaid
+flowchart TD
+  A[React UI] --> B[Mic Recorder Loop]
+  B --> C[Transcription Request]
+  C --> D[Transcript State]
+  D --> E[Suggestion Request]
+  E --> F[Suggestion Cards]
+  F --> G[Chat Request]
+  G --> H[Chat History]
+  D --> I[Session Export]
+  F --> I
+  H --> I
+```
 
 ```mermaid
 flowchart LR
-    A[Mic Capture<br/>30s chunk] --> B[FastAPI /transcribe<br/>Whisper Large V3]
-    B --> C[Transcript Store<br/>full + chunked]
-    C --> D[Context Builder<br/>recent N chars]
-    C --> E[Older Context Summarizer<br/>only if long]
-    F[Recent Suggestion Memory<br/>last 2 batches] --> G[FastAPI /suggest<br/>GPT-OSS 120B]
-    D --> G
-    E --> G
-    G --> H[3 Suggestion Cards]
-    H --> I[FastAPI /chat<br/>GPT-OSS 120B]
-    D --> I
-    E --> I
-    I --> J[Session Chat]
-    C --> K[Export JSON<br/>transcript + suggestions + chat]
-    H --> K
-    J --> K
+  subgraph Frontend [React Frontend]
+    U[App.jsx]
+    M[MediaRecorder]
+    S[Status and progress UI]
+    L[Latency metrics]
+    P[Optional prompt debug]
+  end
+
+  subgraph Backend [FastAPI Backend]
+    T[transcribe]
+    SG[suggest]
+    C[chat]
+  end
+
+  subgraph Groq [Groq]
+    W[whisper-large-v3]
+    G[gpt-oss-120b]
+  end
+
+  U --> M
+  M --> T
+  T --> W
+  U --> SG
+  U --> C
+  SG --> G
+  C --> G
+  U --> S
+  U --> L
+  U --> P
 ```
 
-Tradeoff choices:
-- Recent-window first improves latency and relevance for live moments.
-- Older-summary fallback preserves long-range context without sending full transcript each request.
-- Previous-suggestion memory improves variation and reduces repeated cards.
-- Kept local/session-only storage to match assignment scope and avoid persistence complexity.
-- isFirstRecordingCycle was used to dispaly first transcript very quickly so that user can immediatly see the recording is working rather than waiting for the transcript for a long time.
+```mermaid
+sequenceDiagram
+  participant User
+  participant UI as React App
+  participant MR as MediaRecorder
+  participant API as FastAPI
+  participant Groq as Groq
 
-## Prompt Strategy
-
-## Live Suggestions Prompt
-
-Goals:
-- produce exactly 3 suggestions every cycle
-- maximize immediate usefulness (preview itself should add value)
-- diversify suggestion types (question, talking point, answer, fact-check, clarification)
-
-Design choices:
-- strict JSON output requirement for parse reliability
-- explicit schema (`type`, `title`, `preview`, `reason`)
-- constraints to reduce verbose/generic responses
-- context instruction to prioritize recent conversation
-- context size can be set by the user with the default being 4000 characters
-
-## Detailed Answer Prompt
-
-Goals:
-- turn clicked suggestion into practical, longer-form help
-- ground response in transcript context
-- keep result concise enough for live usage
-
-Design choices:
-- separate prompt from live suggestion prompt
-- include transcript + chat context
-- uncertainty behavior: state missing info instead of fabricating
-- context size can be set by the user with the default being 7000 characters
-
-## Assignment Checklist (Current Status)
-
-## Mic + transcript
-
-- Start/stop mic button: **PASS**
-- Transcript appends in chunks roughly every 30s: **PASS**
-- Auto-scroll to latest line: **PASS**
-
-## Live suggestions
-
-- Transcript and suggestions auto-refresh every ~30s: **PASS**
-- Manual refresh button: **PASS**
-- Exactly 3 fresh suggestions per refresh: **PASS** (validated server-side)
-- New batch at top, older below: **PASS**
-- Tappable cards with useful preview + expanded details on click: **PASS**
-- Suggestion quality and contextual mix: **PARTIAL** (works, but can improve with more testing)
-
-## Chat
-
-- Clicking suggestion adds to chat and returns detailed answer: **PASS**
-- User can ask direct questions: **PASS**
-- Single in-session chat, no persistence across reload: **PASS**
-
-## Export
-
-- Export transcript + suggestion batches + full chat with timestamps: **PASS**
-
-## Technical requirements
-
-- Groq models used as required: **PASS**
-- User-provided API key in settings: **PASS**
-- Editable prompts/settings with defaults: **PASS**
-- Deployment (public URL): **NOT DONE** (local/offline scope currently)
-
-## Module responsibilities
-
-- `js/state.js`: session state and default settings seeding.
-- `js/ui.js`: rendering, banners, button loading states, prompt debug output.
-- `js/context.js`: context slicing, recency boost, summarization, suggestion quality checks.
-- `js/api.js`: shared HTTP wrapper and status-code error mapping.
-- `js/app.js`: orchestration of audio loop, suggest/chat calls, settings, export.
-
-## Tradeoffs (offline version)
-
-- Chose localStorage for fast iteration and no backend auth complexity.
-- Chose strict JSON contracts to avoid frontend parsing instability.
-- Chose 30s cycle for assignment compliance over lower-latency micro-chunks.
-- Kept UI simple to focus effort on prompting, context flow, and reliability.
+  User->>UI: Start mic
+  UI->>MR: start
+  loop Every 30s while recording
+    UI->>MR: stop chunk
+    UI->>MR: start next chunk
+    UI->>API: POST transcribe audio.webm
+    API->>Groq: whisper-large-v3
+    Groq-->>API: text
+    API-->>UI: JSON text
+    UI->>API: POST suggest transcript plus context
+    API->>Groq: gpt-oss-120b JSON mode
+    Groq-->>API: suggestions JSON
+    API-->>UI: normalized three cards
+  end
+  User->>UI: Click card or send chat
+  UI->>API: POST chat
+  API->>Groq: gpt-oss-120b
+  Groq-->>API: answer
+  API-->>UI: answer text
+```

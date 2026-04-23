@@ -1,26 +1,20 @@
+import json
+import logging
+
+import uvicorn
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from groq import Groq, AuthenticationError, RateLimitError
-import uvicorn
-import json
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 ALLOWED_SUGGESTION_TYPES = {"ask_question", "talking_point", "answer", "fact_check", "clarify"}
-GENERIC_MARKERS = {
-    "ask for clarification",
-    "summarize the discussion",
-    "good point",
-    "consider discussing",
-    "you may want to",
-    "it depends",
-}
 
 
 def _parse_json_suggestions(content: str):
-    """
-    Parse model output into a normalized list of exactly 3 suggestions.
-    """
+    """Parse model JSON into at most three normalized suggestion objects."""
     payload = json.loads(content)
     suggestions = payload.get("suggestions", [])
     if not isinstance(suggestions, list):
@@ -53,56 +47,41 @@ def _parse_json_suggestions(content: str):
 
 def _validate_suggestion_quality(suggestions):
     if len(suggestions) != 3:
-        raise HTTPException(status_code=422, detail="Model did not return exactly 3 suggestions.", scope="suggestions")
+        raise HTTPException(status_code=422, detail="Model did not return exactly 3 suggestions.")
 
     type_count = len({s["type"] for s in suggestions})
     if type_count < 2:
-        raise HTTPException(status_code=422, detail="Suggestion types are not diverse enough.", scope="suggestions")
+        raise HTTPException(status_code=422, detail="Suggestion types are not diverse enough.")
 
     title_count = len({s["title"].lower() for s in suggestions})
     if title_count != 3:
-        raise HTTPException(status_code=422, detail="Suggestion titles are duplicated.", scope="suggestions")
-
-    for suggestion in suggestions:
-        text = f"{suggestion['title']} {suggestion['preview']}".lower()
-        if any(marker in text for marker in GENERIC_MARKERS):
-            raise HTTPException(status_code=422, detail="Suggestions are too generic; regenerate.", scope="suggestions")
+        raise HTTPException(status_code=422, detail="Suggestion titles are duplicated.")
 
 @app.post("/transcribe")
 async def transcribe(audio: UploadFile = File(...), key: str = Form(...)):
-    """
-    Handles audio chunk transcription using Whisper Large V3.
-    """
     try:
         client = Groq(api_key=key)
         audio_bytes = await audio.read()
-        
-        # Whisper Large V3 is the required model 
         transcription = client.audio.transcriptions.create(
             file=("audio.webm", audio_bytes),
             model="whisper-large-v3",
             response_format="json"
         )
-        
         return {"ok": True, "data": {"text": transcription.text}}
     except AuthenticationError:
         if not key or key == "undefined":
-            print("DEBUG: API Key is missing!")
             raise HTTPException(status_code=400, detail="API Key missing.")
-        else:
-            raise HTTPException(status_code=401, detail="Invalid Groq API Key.")
+        raise HTTPException(status_code=401, detail="Invalid Groq API Key.")
     except RateLimitError:
         raise HTTPException(status_code=429, detail="Groq rate limit reached.")
-    except Exception as e:
-        print(f"System Error: {e}") # Log full error for you
-        raise HTTPException(status_code=500, detail="Transcription service unavailable.", scope="transcript")
+    except Exception:
+        logger.exception("transcribe failed")
+        raise HTTPException(status_code=500, detail="Transcription service unavailable.")
 
 @app.post("/suggest")
 async def suggest(transcript: str = Form(...), prompt: str = Form(...), key: str = Form(...), sugg_context: str = Form(...)):
     try:
         client = Groq(api_key=key)
-        # Suggestions use GPT-OSS 120B [cite: 37]
-        # We ask for JSON to easily render the 3 cards [cite: 22, 24]
         response = client.chat.completions.create(
             model="openai/gpt-oss-120b",
             messages=[
@@ -117,21 +96,18 @@ async def suggest(transcript: str = Form(...), prompt: str = Form(...), key: str
         return {"ok": True, "data": {"suggestions": suggestions}}
     except AuthenticationError:
         if not key or key == "undefined":
-            print("DEBUG: API Key is missing!")
             raise HTTPException(status_code=400, detail="API Key missing.")
-        else:
-            raise HTTPException(status_code=401, detail="Invalid Groq API Key.")
+        raise HTTPException(status_code=401, detail="Invalid Groq API Key.")
     except RateLimitError:
         raise HTTPException(status_code=429, detail="Groq rate limit reached.")
-    except Exception as e:
-        print(f"System Error: {e}") # Log full error for you
-        raise HTTPException(status_code=500, detail="Suggestion service unavailable.", scope="suggestions")
+    except Exception:
+        logger.exception("suggest failed")
+        raise HTTPException(status_code=500, detail="Suggestion service unavailable.")
 
 @app.post("/chat")
 async def chat(question: str = Form(...), chat_context: str = Form(...), transcript: str = Form(...), prompt: str = Form(...), key: str = Form(...)):
     try:
         client = Groq(api_key=key)
-        # Chat uses the same GPT-OSS 120B model but a separate expanded prompt [cite: 30, 37]
         response = client.chat.completions.create(
             model="openai/gpt-oss-120b",
             messages=[
@@ -143,15 +119,13 @@ async def chat(question: str = Form(...), chat_context: str = Form(...), transcr
         return {"ok": True, "data": {"answer": answer}}
     except AuthenticationError:
         if not key or key == "undefined":
-            print("DEBUG: API Key is missing!")
             raise HTTPException(status_code=400, detail="API Key missing.")
-        else:
-            raise HTTPException(status_code=401, detail="Invalid Groq API Key.")
+        raise HTTPException(status_code=401, detail="Invalid Groq API Key.")
     except RateLimitError:
         raise HTTPException(status_code=429, detail="Groq rate limit reached.")
-    except Exception as e:
-        print(f"System Error: {e}") # Log full error for you
-        raise HTTPException(status_code=500, detail="Chat service unavailable.", scope="chat")
+    except Exception:
+        logger.exception("chat failed")
+        raise HTTPException(status_code=500, detail="Chat service unavailable.")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

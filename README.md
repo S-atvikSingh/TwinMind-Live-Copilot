@@ -130,8 +130,7 @@ TwinMind employs a multi-layered prompting architecture designed to transform ra
 - Suggestion quality checks run on the client as well as basic validation on the server, so the UI can degrade gracefully with a clear error if all attempts fail.
 
 ## User Interface
-
-![twinMinds Copilot by Satvik](image.png)
+![twinMinds Copilot by Satvik](image-3.png)
   Some details were added to the UI beyond the prototype to improve the user experience, for example:
 
   1. Latency Header

@@ -5,20 +5,22 @@ Web app that captures microphone audio during a conversation, transcribes it in 
 ## Submission
 
 Live URL:
+Frontend (Vercel): [twin-mind-live-copilot-satvik.vercel.app](https://twin-mind-live-copilot-satvik.vercel.app/)
+Backend (Render): [https://twinmind-live-copilot.onrender.com](https://twinmind-live-copilot.onrender.com)
 
 ## Stack
 
 The frontend is **React** with **Vite**. The backend is **FastAPI** on Python. All model calls go through **Groq**: **whisper-large-v3** for transcription and **openai/gpt-oss-120b** for suggestions and chat, matching the assignment model line.
 
 ## Local setup
-
+Download the files from github:
 Backend (from the `backend` directory): create a virtual environment, install dependencies with `pip install -r requirements.txt`, then run `python main.py`. The API listens on `http://localhost:8000` by default.
 
 Frontend (from the `frontend` directory): run `npm install` and `npm run dev`. Open the URL Vite prints (typically `http://localhost:5173`). Paste your Groq API key in Settings before starting the microphone.
 
 ## Deployment
 
-Run the FastAPI app on a host that exposes HTTPS and note its origin for CORS (the backend allows all origins for this prototype). Build the frontend with `npm run build` and serve the `dist` folder. Set the environment variable `VITE_API_BASE` at build time to your public API origin (for example `https://api.example.com`) so the browser calls your deployed backend instead of `http://localhost:8000`.
+Run the FastAPI app on a host that exposes HTTPS and note its origin for CORS (the backend allows all origins for this prototype). Build the frontend with `npm run build` and serve the `dist` folder. Set the environment variable `VITE_API_BASE` at build time to your public API origin (for our example `https://twinmind-live-copilot.onrender.com`) so the browser calls your deployed backend instead of `http://localhost:8000`. Before running the model remember to set your groq API key in the settings tab.
 
 ## Behavior
 
@@ -30,9 +32,32 @@ The Settings panel stores values in `localStorage`. The user supplies the Groq A
 
 ## Prompt strategy
 
-Suggestions use a strict JSON object response shape from Groq. The system message is the long assignment-style prompt (types, standalone previews, grounding). The user message sent by the backend combines the recent transcript window (last N characters, default 4000) with a structured context block built on the client: configurable timing guidance, a recency-biased excerpt, optional compressed older context when the session is long, the last two suggestion batches serialized so the model avoids repeating themes, and light heuristics (for example sequence or puzzle phrasing) that nudge toward concrete answers. The client may retry the suggest call up to four times until local quality checks pass (three items, at least two distinct types, three distinct titles). Chat requests send a similar recent window (default 7000 characters for chat) plus recency boost text, older summary when applicable, and for card clicks a block with the suggestion type, title, preview, and reason. Transcript text used in API calls is kept in a ref updated immediately after each transcribe response so the first suggestion batch after a chunk is never empty due to React state batching.
+TwinMind employs a multi-layered prompting architecture designed to transform raw transcripts into high-utility executive insights using Instructional Guardrails, Few-Shot Calibration, and Chain-of-Thought (CoT) reasoning.
 
-The backend parses JSON, normalizes types to the allowed set, trims lengths, and rejects responses that are not exactly three suggestions, that reuse titles, or that collapse to a single suggestion type, which triggers the client retry loop.
+1. The "Real-Time Strategist" (Suggestion Engine)
+  The suggestion engine is built on a Strict Instructional Framework to ensure zero-latency value:
+
+  Standalone Value Mandate: The prompt strictly forbids "promise-based" advice (e.g., "I can find the revenue growth"). Instead, it enforces a mandate where every suggestion must contain the actual insight or data point discovered (e.g., "Q2 revenue grew by 14% ($2.1M)").
+
+  Few-Shot Calibration: I implemented complex Few-Shot Examples covering technical scenarios—such as identifying logic puzzles and correcting algorithmic inaccuracies (BFS vs. Dijkstra in weighted graphs). This serves as a calibration layer for the model's tone and technical depth.
+
+  Type-Diversity Guardrails: The system requires a mandatory mix of at least two distinct cognitive categories (e.g., fact_check and talking_point) per batch, preventing the model from falling into repetitive instructional loops.
+
+2. The "Senior Historian" (Chat & Detail Engine)
+  The chat architecture focuses on Deep-Context Synthesis and Audit-Grade Evidence:
+
+  Evidence-First Protocol: The model is explicitly instructed to lead with direct transcript evidence and speaker attribution (e.g., "The lead engineer mentioned..."), turning the assistant into a verified meeting auditor.
+
+  Information Gap Identification: A specialized guardrail handles uncertainty. Instead of hallucinating, the model is trained to identify "blind spots"—explicitly stating what was not discussed and suggesting follow-up questions to bridge those gaps.
+
+  CoT Expansion: When a user interacts with a suggestion card, the tm_detail_prompt triggers a specialized expansion, breaking down the high-level advice into a structured, executable plan grounded in the meeting's specific trajectory.
+
+3. Context Orchestration & Technical Resilience
+  Dual-Window Slicing: The system utilizes a 7,000-character Full Context window for historical accuracy and a 1,200-character "Recency Boost" to prioritize immediate conversation turns.
+
+  State-Sync Integrity: By managing transcripts via React refs rather than batched state, the system ensures that the first suggestion batch of any session is fully grounded, solving common "empty-batch" initialization errors.
+
+  Validation & Heuristic Loops: A robust client-server handshake rejects malformed JSON or repetitive titles, triggering an auto-retry loop (up to 4 attempts) to guarantee the user only interacts with high-signal, varied content.
 
 ## Tradeoffs
 

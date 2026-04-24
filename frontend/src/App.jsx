@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
+// Keep API host configurable so local/dev/prod use the same build.
+// In hosted environments (Vercel), set VITE_API_BASE at build time.
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
 const CHUNK_MS = 30000;
 
@@ -210,6 +212,8 @@ export default function App() {
   }
 
   function buildOlderSummary(text) {
+  // Heuristic compression keeps prompt size bounded in long meetings.
+  // We sample a few sentences instead of sending full older transcript.
     const lines = text
       .split(/[.!?]\s+/)
       .map((x) => x.trim())
@@ -224,6 +228,8 @@ export default function App() {
   }
 
   function buildTranscriptWindow(kind) {
+  // Suggest and chat intentionally use different context sizes:
+  // suggestions need speed; chat benefits from a wider historical window.
     const n = parseNum(kind === "suggestions" ? "tm_sugg_last_n_chars" : "tm_chat_last_n_chars", kind === "suggestions" ? 4000 : 7000);
     const trigger = parseNum("tm_context_summary_trigger_chars", 1500);
     const boost = parseNum("tm_recency_boost_chars", 1200);
@@ -241,6 +247,8 @@ export default function App() {
   }
 
   function normalizeSuggestions(items) {
+  // Defensive normalization: model output can contain duplicates/missing fields.
+  // UI assumes cards are usable without extra null checks.
     const seen = new Set();
     const out = [];
     for (const item of items || []) {
@@ -261,6 +269,7 @@ export default function App() {
   }
 
   function suggestionsPassQuality(batch) {
+  // Quality gate is intentionally strict so live cards feel diverse and useful.
     if (!Array.isArray(batch) || batch.length !== 3) return false;
     const types = new Set(batch.map((b) => b.type.toLowerCase()));
     const titles = new Set(batch.map((b) => b.title.toLowerCase()));
@@ -268,6 +277,7 @@ export default function App() {
   }
 
   function setCycleTicker() {
+  // Render smooth progress while MediaRecorder chunk timer is running.
     clearInterval(cycleTickerRef.current);
     cycleTickerRef.current = setInterval(() => {
       if (!isRecordingRef.current) {
@@ -280,6 +290,7 @@ export default function App() {
   }
 
   function setTranscribeTicker(startedMs = Date.now()) {
+  // Fake-progress avoids a "frozen" UI while waiting for network/model latency.
     clearInterval(transcribeTickerRef.current);
     setTranscribingProgress(5);
     transcribeTickerRef.current = setInterval(() => {
@@ -306,6 +317,7 @@ export default function App() {
   }
 
   async function postForm(url, formData) {
+  // Normalize backend validation/auth errors into a single readable message path.
     const res = await fetch(url, { method: "POST", body: formData });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(formatHttpDetail(body.detail) || `HTTP ${res.status}`);
@@ -325,6 +337,7 @@ export default function App() {
     cycleStartedAtRef.current = Date.now();
     setCycleTicker();
 
+    // audio/webm aligns with backend transcribe endpoint expectations.
     const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
     recorder.ondataavailable = (e) => {
       if (e.data.size > 0) chunksRef.current.push(e.data);
@@ -368,6 +381,7 @@ export default function App() {
     setCycleTicker();
 
     const recorder = mediaRecorderRef.current;
+    // Stop/start recorder each cycle to flush exactly one chunk for upload.
     const chunkReady = new Promise((resolve) => {
       const onStop = () => {
         recorder.removeEventListener("stop", onStop);
@@ -415,6 +429,8 @@ export default function App() {
       const text = payload?.data?.text || "";
       if (text.trim()) {
         const ts = nowTime();
+        // Ref is updated first so follow-up suggest call always sees fresh text
+        // (avoids waiting for async React state batching).
         const merged = `${fullTranscriptRef.current} ${text}`.trim();
         fullTranscriptRef.current = merged;
         setFullTranscript(merged);
@@ -447,6 +463,7 @@ export default function App() {
       recentTranscript.includes("next numbers") ||
       recentTranscript.includes("puzzle") ||
       recentTranscript.includes("riddle");
+    // Feed recent cards back so the model avoids repeating themes.
     const recentHistory = suggestionBatches.slice(-2).map((b) => ({
       batchNumber: b.batchNumber,
       suggestions: b.suggestions.map((s) => ({ type: s.type, title: s.title, preview: s.preview }))
@@ -465,6 +482,7 @@ export default function App() {
     ];
     const context = contextParts.filter(Boolean).join("\n\n");
 
+    // LLM JSON quality can vary; retry a few times before surfacing failure.
     const MAX_RETRY = 4;
     let best = [];
     for (let i = 1; i <= MAX_RETRY; i += 1) {
@@ -485,6 +503,7 @@ export default function App() {
           userContextPreview: context.slice(0, 1000),
           responsePreview: JSON.stringify(payload?.data?.suggestions || []).slice(0, 1000)
         });
+        // Stop early once we hit UX constraints (3 cards, diverse/unique).
         if (suggestionsPassQuality(normalized)) break;
       } catch (err) {
         appendPromptLog({
@@ -587,6 +606,7 @@ export default function App() {
   }
 
   function exportSession() {
+    // Export is intentionally complete for offline review/debug of a session.
     const payload = {
       transcriptText: fullTranscript,
       transcriptChunks,
@@ -637,6 +657,7 @@ export default function App() {
   }, [metrics]);
 
   const promptDebugText = useMemo(() => {
+    // Reverse so newest entries are visible first in the debug panel.
     if (settings.tm_show_prompt_debug !== "true") return "";
     return promptDebugLog
       .slice()

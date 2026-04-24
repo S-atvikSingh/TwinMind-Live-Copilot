@@ -4,8 +4,6 @@ Web app that captures microphone audio during a conversation, transcribes it in 
 
 ## Submission
 
-Live URL:
-
 Frontend (Vercel): [twin-mind-live-copilot-satvik.vercel.app](https://twin-mind-live-copilot-satvik.vercel.app/)
 
 Backend (Render): [https://twinmind-live-copilot.onrender.com](https://twinmind-live-copilot.onrender.com)
@@ -24,18 +22,18 @@ Backend (Render): [https://twinmind-live-copilot.onrender.com](https://twinmind-
   Before setting up the project, ensure you have the following installed and configured on your local machine:
 
   1. Environment & Runtimes
-    Python 3.10+: Required for the FastAPI backend.
-    Node.js (v18+) & npm: Necessary for the React/Vite frontend environment.
-    Virtual Environment: It is highly recommended to use venv or conda to isolate Python dependencies.
+    - Python 3.10+: Required for the FastAPI backend.
+    - Node.js (v18+) & npm: Necessary for the React/Vite frontend environment.
+    - Virtual Environment: It is highly recommended to use venv or conda to isolate Python dependencies.
 
   2. API Access & Credentials
-    Groq API Key: You must have a valid API key from Groq Console.
-    This project utilizes whisper-large-v3 for transcription and gpt-oss-120b for the suggestion and chat engines.
-    Hardware Permissions: A working microphone and browser-level permission to access the MediaRecorder API (Chrome, Edge, or Firefox recommended).
+    - Groq API Key: You must have a valid API key from Groq Console.
+    - This project utilizes whisper-large-v3 for transcription and gpt-oss-120b for the suggestion and chat engines.
+    - Hardware Permissions: A working microphone and browser-level permission to access the MediaRecorder API (Chrome, Edge, or Firefox recommended).
 
   3. Network Requirements
-    Internet Connection: Required for real-time inference calls to Groq's cloud endpoints.
-    Port Availability: By default, the project uses port 8000 for the backend and 5173 for the frontend.
+    - Internet Connection: Required for real-time inference calls to Groq's cloud endpoints.
+    - Port Availability: By default, the project uses port 8000 for the backend and 5173 for the frontend.
 
 ## Local setup
 Clone and install:
@@ -72,21 +70,21 @@ Notes:
 
 ## Behavior
 
-Recording uses a **30 second** `MediaRecorder` cycle: each stop sends one WebM chunk to `/transcribe`, appends the returned text to the transcript column with auto-scroll, then calls `/suggest` so the middle column always reflects the latest text. 
+- Recording uses a **30 second** `MediaRecorder` cycle: each stop sends one WebM chunk to `/transcribe`, appends the returned text to the transcript column with auto-scroll, then calls `/suggest` so the middle column always reflects the latest text. 
 
-**Reload suggestions** stops the current timer cycle early, transcribes the in-progress chunk, and runs the same suggest path. 
+- **Reload suggestions** stops the current timer cycle early, transcribes the in-progress chunk, and runs the same suggest path. 
 
-New suggestion batches are **prepended** so the freshest three cards stay at the top. 
+- New suggestion batches are **prepended** so the freshest three cards stay at the top. 
 
-Each card shows type, title, and a short preview; a click sends a structured question plus metadata to `/chat`. 
+- Each card shows type, title, and a short preview; a click sends a structured question plus metadata to `/chat`. 
 
-The chat column is one continuous thread for the session and renders headings/lists for easier readability. New responses auto-scroll into view only when the user is already near the bottom, so manual scroll position is not interrupted.
+- The chat column is one continuous thread for the session and renders headings/lists for easier readability. New responses auto-scroll into view only when the user is already near the bottom, so manual scroll position is not interrupted.
 
-**Export session** downloads JSON containing the full transcript, all suggestion batches with timestamps, chat turns, optional prompt debug entries, and rolling latency samples.
+- **Export session** downloads JSON containing the full transcript, all suggestion batches with timestamps, chat turns, optional prompt debug entries, and rolling latency samples.
 
-Client-side VAD evaluates chunk energy before transcription. If a chunk is too quiet, the transcript logs a no-audio marker and suggestion cards show mic guidance instead of model-generated content. 
+- Client-side VAD evaluates chunk energy before transcription. If a chunk is too quiet, the transcript logs a no-audio marker and suggestion cards show mic guidance instead of model-generated content. 
 
-Browser page refresh/navigation now shows a native unsaved-session warning when transcript, suggestions, or chat contain data.
+- Browser page refresh/navigation now shows a native unsaved-session warning when transcript, suggestions, or chat contain data.
 
 ## Settings
 
@@ -102,27 +100,27 @@ TwinMind employs a multi-layered prompting architecture designed to transform ra
 1. The "Real-Time Strategist" (Suggestion Engine)
   The suggestion engine is built on a Strict Instructional Framework to ensure that suggestions are useful, well timed & varied by context:
 
-    Standalone Value Mandate: The prompt strictly forbids "promise-based" advice (e.g., "I can find the revenue growth"). Instead, it enforces a mandate where every suggestion must contain the actual insight or data point discovered (e.g., "Q2 revenue grew by 14% ($2.1M)").
+  -  Standalone Value Mandate: The prompt strictly forbids "promise-based" advice (e.g., "I can find the revenue growth"). Instead, it enforces a mandate where every suggestion must contain the actual insight or data point discovered (e.g., "Q2 revenue grew by 14% ($2.1M)").
    
-    Few-Shot Calibration: I implemented complex Few-Shot Examples covering technical scenarios—such as identifying logic puzzles and correcting algorithmic inaccuracies (BFS vs. Dijkstra in weighted graphs). This serves as a calibration layer for the model's tone and technical depth.
+  -  Few-Shot Calibration: I implemented complex Few-Shot Examples covering technical scenarios—such as identifying logic puzzles and correcting algorithmic inaccuracies (BFS vs. Dijkstra in weighted graphs). This serves as a calibration layer for the model's tone and technical depth.
    
-    Type-Diversity Guardrails: The system requires a mandatory mix of at least two distinct cognitive categories (e.g., fact_check and talking_point) per batch, preventing the model from falling into repetitive instructional loops.
+  -  Type-Diversity Guardrails: The system requires a mandatory mix of at least two distinct cognitive categories (e.g., fact_check and talking_point) per batch, preventing the model from falling into repetitive instructional loops.
 
-3. The "Senior Historian" (Chat & Detail Engine)
+2. The "Senior Historian" (Chat & Detail Engine)
   The chat architecture focuses on providing detailed response to the user's inquiry or the selected suggestion.:
 
-    Evidence-First Protocol: The model is explicitly instructed to lead with direct transcript evidence and speaker attribution (e.g., "The lead engineer mentioned..."), thus ensuring the results are based on evidence.
+  -  Evidence-First Protocol: The model is explicitly instructed to lead with direct transcript evidence and speaker attribution (e.g., "The lead engineer mentioned..."), thus ensuring the results are based on evidence.
    
-    Information Gap Identification: A specialized guardrail handles uncertainty. Instead of hallucinating, the model is trained to identify "blind spots"—explicitly stating what was not discussed and suggesting follow-up questions to bridge those gaps.
+  -  Information Gap Identification: A specialized guardrail handles uncertainty. Instead of hallucinating, the model is trained to identify "blind spots"—explicitly stating what was not discussed and suggesting follow-up questions to bridge those gaps.
    
-    CoT Expansion: When a user interacts with a suggestion card, the tm_detail_prompt triggers a specialized expansion, breaking down the high-level advice into a structured, executable plan grounded in the meeting's context.
+  -  CoT Expansion: When a user interacts with a suggestion card, the tm_detail_prompt triggers a specialized expansion, breaking down the high-level advice into a structured, executable plan grounded in the meeting's context.
 
-5. Context Orchestration & Technical Resilience
-    Dual-Window Slicing: The system utilizes a 7,000-character Full Context window for historical accuracy and a 1,200-character "Recency Boost" to prioritize immediate conversation  by default.
+3. Context Orchestration & Technical Resilience
+  -   Dual-Window Slicing: The system utilizes a 7,000-character Full Context window for historical accuracy and a 1,200-character "Recency Boost" to prioritize immediate conversation  by default.
 
-    State-Sync Integrity: By managing transcripts via React refs rather than batched state, the system ensures that the first suggestion batch of any session is fully grounded, solving the "empty-batch" initialization errors faced by me, which caused the first suggestion to be based on an empty transcript.
+  -  State-Sync Integrity: By managing transcripts via React refs rather than batched state, the system ensures that the first suggestion batch of any session is fully grounded, solving the "empty-batch" initialization errors faced by me, which caused the first suggestion to be based on an empty transcript.
    
-    Validation & Heuristic Loops: A robust client-server handshake rejects malformed JSON or repetitive titles, triggering an auto-retry loop (up to 4 attempts) to guarantee the user only interacts with high-signal, varied content.
+  -  Validation & Heuristic Loops: A robust client-server handshake rejects malformed JSON or repetitive titles, triggering an auto-retry loop (up to 4 attempts) to guarantee the user only interacts with high-signal, varied content.
 
 ## Tradeoffs
 
@@ -138,11 +136,13 @@ TwinMind employs a multi-layered prompting architecture designed to transform ra
 
   1. Latency Header
   ![Latency Header](image-1.png)
-  The header bar records the last, median, and mean round-trip times over the ten most recent calls each for transcribe, suggest, and chat. Coarse progress indicators in each column reserve vertical space so status text does not shift the layout when states change.
+  - The header bar records the last, median, and mean round-trip times over the ten most recent calls each for transcribe, suggest, and chat.
+  - Coarse progress indicators in each column reserve vertical space so status text does not shift the layout when states change.
 
   2. Progress Bars
   ![Progress bars](image-2.png)
-  The progress bars were added to the bottom of the page to show the time to render the transcription, suggestion cards and chats. The progress bars make the whole system feel more responsive. 
+  - The progress bars were added to the bottom of the page to show the time to render the transcription, suggestion cards and chats.
+  - The progress bars make the whole system feel more responsive. 
 
 ## Repository layout
 

@@ -358,7 +358,7 @@ export default function App() {
 
   function appendSilentChunkAndHints() {
     const ts = nowTime();
-    const text = "[No audible speech detected in this 30s chunk]";
+    const text = "[No audio detected]";
     const merged = `${fullTranscriptRef.current} ${text}`.trim();
     fullTranscriptRef.current = merged;
     setFullTranscript(merged);
@@ -387,7 +387,7 @@ export default function App() {
       { batchNumber: prev.length + 1, timestamp: new Date().toISOString(), suggestions: hints },
       ...prev
     ]);
-    updateStatus("transcript", "idle", "No audio detected for 30s.");
+    updateStatus("transcript", "idle", "No audio detected.");
     updateStatus("suggestions", "idle", "Suggestions paused until speech is detected.");
     appendPromptLog({ endpoint: "transcribe", ok: true, note: "silent chunk skipped by Voice Actity Detection logic" });
   }

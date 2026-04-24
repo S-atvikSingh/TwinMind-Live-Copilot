@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+//For local
+//const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+//For production
+const API_BASE = "https://twinmind-live-copilot.onrender.com";
 const CHUNK_MS = 30000;
 
 const DEFAULT_SETTINGS = {

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import FixedStatus from "./components/FixedStatus";
+import { formatHttpDetail, mean, median, nowTime } from "./utils/appUtils";
 
 // Keep API host configurable so local/dev/prod use the same build.
 // In hosted environments (Vercel), set VITE_API_BASE at build time.
@@ -118,22 +120,6 @@ const initialColumnStatus = {
   suggestions: { type: "idle", message: "Waiting for transcript" },
   chat: { type: "idle", message: "Ask anything or click a suggestion" }
 };
-
-function median(values) {
-  if (!values.length) return null;
-  const arr = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(arr.length / 2);
-  return arr.length % 2 ? arr[mid] : Math.round((arr[mid - 1] + arr[mid]) / 2);
-}
-
-function mean(values) {
-  if (!values.length) return null;
-  return Math.round(values.reduce((s, v) => s + v, 0) / values.length);
-}
-
-function nowTime() {
-  return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-}
 
 export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -303,17 +289,6 @@ export default function App() {
     clearTimeout(cycleTimeoutRef.current);
     clearInterval(cycleTickerRef.current);
     clearInterval(transcribeTickerRef.current);
-  }
-
-  function formatHttpDetail(detail) {
-    if (detail == null || detail === "") return "";
-    if (typeof detail === "string") return detail;
-    if (Array.isArray(detail)) {
-      return detail
-        .map((e) => (e && typeof e === "object" && "msg" in e ? e.msg : JSON.stringify(e)))
-        .join("; ");
-    }
-    return String(detail);
   }
 
   async function postForm(url, formData) {
@@ -835,19 +810,6 @@ export default function App() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function FixedStatus({ status, progress }) {
-  const type = status?.type || "idle";
-  const pct = Math.max(0, Math.min(100, progress || 0));
-  return (
-    <div className={`status-slot ${type}`}>
-      <div className="status-text">{status?.message || ""}</div>
-      <div className="progress-track">
-        <div className="progress-fill" style={{ width: `${pct}%` }} />
-      </div>
     </div>
   );
 }

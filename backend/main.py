@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 
 import uvicorn
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
@@ -9,7 +10,26 @@ from groq import Groq, AuthenticationError, RateLimitError
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+
+def _cors_origins():
+    """Resolve allowed frontend origins from env, with local-safe defaults."""
+    raw = os.getenv("FRONTEND_ORIGINS", "").strip()
+    if raw:
+        return [x.strip() for x in raw.split(",") if x.strip()]
+    return [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://twin-mind-live-copilot-satvik.vercel.app",
+    ]
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins(),
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 ALLOWED_SUGGESTION_TYPES = {"ask_question", "talking_point", "answer", "fact_check", "clarify"}
 
 

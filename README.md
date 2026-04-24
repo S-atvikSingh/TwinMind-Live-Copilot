@@ -13,14 +13,35 @@ Backend (Render): [https://twinmind-live-copilot.onrender.com](https://twinmind-
 The frontend is **React** with **Vite**. The backend is **FastAPI** on Python. All model calls go through **Groq**: **whisper-large-v3** for transcription and **openai/gpt-oss-120b** for suggestions and chat, matching the assignment model line.
 
 ## Local setup
-Download the files from github:
+Clone and install:
+
+```bash
+git clone https://github.com/S-atvikSingh/TwinMind-Live-Copilot.git
+cd TwinMind-Live-Copilot
+```
+
 Backend (from the `backend` directory): create a virtual environment, install dependencies with `pip install -r requirements.txt`, then run `python main.py`. The API listens on `http://localhost:8000` by default.
 
 Frontend (from the `frontend` directory): run `npm install` and `npm run dev`. Open the URL Vite prints (typically `http://localhost:5173`). Paste your Groq API key in Settings before starting the microphone.
 
 ## Deployment
 
-Run the FastAPI app on a host that exposes HTTPS and note its origin for CORS (the backend allows all origins for this prototype). Build the frontend with `npm run build` and serve the `dist` folder. Set the environment variable `VITE_API_BASE` at build time to your public API origin (for our example `https://twinmind-live-copilot.onrender.com`) so the browser calls your deployed backend instead of `http://localhost:8000`. Before running the model remember to set your groq API key in the settings tab.
+Backend (Render):
+- Deploy `backend` as a Python web service.
+- Start command: `python main.py` (or an equivalent uvicorn command).
+- Set `FRONTEND_ORIGINS` to your frontend domain(s), comma-separated.
+  - Example: `https://twin-mind-live-copilot-satvik.vercel.app`
+
+Frontend (Vercel):
+- Import the GitHub repo into Vercel.
+- Set **Root Directory** to `frontend`.
+- Add environment variable `VITE_API_BASE=https://twinmind-live-copilot.onrender.com`.
+- Build command `npm run build`, output directory `dist` (auto-detected for Vite).
+- Redeploy after any environment variable changes.
+
+Notes:
+- Browsers require HTTPS for microphone access in production; Vercel/Render satisfy this.
+- Before running the model, paste your Groq API key into the Settings panel.
 
 ## Behavior
 
@@ -32,7 +53,7 @@ The Settings panel stores values in `localStorage`. The user supplies the Groq A
 
 ## Prompt strategy
 
-TwinMind employs a multi-layered prompting architecture designed to transform raw transcripts into high-utility executive insights using Instructional Guardrails, Few-Shot Calibration, and Chain-of-Thought (CoT) reasoning.
+TwinMind employs a multi-layered prompting architecture designed to transform raw transcripts into high-utility executive insights using instructional guardrails and few-shot calibration.
 
 1. The "Real-Time Strategist" (Suggestion Engine)
   The suggestion engine is built on a Strict Instructional Framework to ensure zero-latency value:

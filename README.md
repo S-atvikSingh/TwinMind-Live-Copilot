@@ -10,13 +10,13 @@ Frontend (Vercel): [twin-mind-live-copilot-satvik.vercel.app](https://twin-mind-
 
 Backend (Render): [https://twinmind-live-copilot.onrender.com](https://twinmind-live-copilot.onrender.com)
 
-**IMPORTANT: The backend is located on the free tier or render so it takes 60-90 seconds to start after mic button on is clicked. Please wait for the required time before using the program.**
+**IMPORTANT: The backend is located on the free tier of Render so it takes 60-90 seconds to start after mic button on is clicked. Please wait for the required time before using the program.**
 
 ## Stack
 
   Frontend: **React** with **Vite**. 
 
-  Backend: **FastAPI** on Python. 
+  Backend: **FastAPI** on **Python**. 
 
   Models: **Groq**: **whisper-large-v3** for transcription, **openai/gpt-oss-120b** for suggestions and chat.
 
@@ -25,21 +25,16 @@ Backend (Render): [https://twinmind-live-copilot.onrender.com](https://twinmind-
 
   1. Environment & Runtimes
     Python 3.10+: Required for the FastAPI backend.
-
     Node.js (v18+) & npm: Necessary for the React/Vite frontend environment.
-
     Virtual Environment: It is highly recommended to use venv or conda to isolate Python dependencies.
 
   2. API Access & Credentials
     Groq API Key: You must have a valid API key from Groq Console.
-
     This project utilizes whisper-large-v3 for transcription and gpt-oss-120b for the suggestion and chat engines.
-
     Hardware Permissions: A working microphone and browser-level permission to access the MediaRecorder API (Chrome, Edge, or Firefox recommended).
 
   3. Network Requirements
     Internet Connection: Required for real-time inference calls to Groq's cloud endpoints.
-
     Port Availability: By default, the project uses port 8000 for the backend and 5173 for the frontend.
 
 ## Local setup
@@ -95,10 +90,11 @@ Browser page refresh/navigation now shows a native unsaved-session warning when 
 
 ## Settings
 
-The Settings panel stores values in `localStorage`. The user supplies the Groq API key only here; it is never committed to the repo. 
-Editable fields include the live suggestion system prompt, the typed chat system prompt, the detailed-answer prompt used when a suggestion is clicked, free-text context snippets prepended to suggestion and chat requests, character limits for the recent transcript slice used in suggestions versus chat, thresholds that control when older transcript is summarized into a short bullet list, and optional prompt debug export. 
-Defaults ship in `frontend/src/App.jsx` as `DEFAULT_SETTINGS`. The settings modal can be closed from the top-right close button or by pressing `Esc`.
-
+- The Settings panel stores values in `localStorage`. 
+- The user supplies the Groq API key only here; it is never committed to the repo. 
+- Editable fields include the live suggestion system prompt, the typed chat system prompt, the detailed-answer prompt used when a suggestion is clicked, free-text context snippets prepended to suggestion and chat requests, character limits for the recent transcript slice used in suggestions versus chat, thresholds that control when older transcript is summarized into a short bullet list, and optional prompt debug export. 
+- Defaults ship in `frontend/src/App.jsx` as `DEFAULT_SETTINGS`.
+  
 ## Prompt strategy
 
 TwinMind employs a multi-layered prompting architecture designed to transform raw transcripts into high-utility insights using instructional guardrails and few-shot calibration.
@@ -124,27 +120,27 @@ TwinMind employs a multi-layered prompting architecture designed to transform ra
 5. Context Orchestration & Technical Resilience
     Dual-Window Slicing: The system utilizes a 7,000-character Full Context window for historical accuracy and a 1,200-character "Recency Boost" to prioritize immediate conversation  by default.
 
-    State-Sync Integrity: By managing transcripts via React refs rather than batched state, the system ensures that the first suggestion batch of any session is fully grounded, solving the "empty-batch" initialization errors faced by me which caused the first suggestion to be based on empty transcript.
+    State-Sync Integrity: By managing transcripts via React refs rather than batched state, the system ensures that the first suggestion batch of any session is fully grounded, solving the "empty-batch" initialization errors faced by me, which caused the first suggestion to be based on an empty transcript.
    
     Validation & Heuristic Loops: A robust client-server handshake rejects malformed JSON or repetitive titles, triggering an auto-retry loop (up to 4 attempts) to guarantee the user only interacts with high-signal, varied content.
 
 ## Tradeoffs
 
-Fixed 30 second chunks balance Whisper cost and latency against how quickly the transcript moves. shorter chunks would react faster but multiply API calls. 
-Client-side retries improve card quality without a second HTTP round-trip design, at the cost of worst-case latency when the model returns weak JSON. 
-Older context is summarized heuristically rather than sent in full, which keeps prompts within limits but can drop nuance from early in a long session. It could be summarazid using a smaller model or by asking LLM itself but that would also increase latency. 
-Suggestion quality checks run on the client as well as basic validation on the server so the UI can degrade gracefully with a clear error if all attempts fail.
+- Fixed 30-second chunks balance Whisper cost and latency against how quickly the transcript moves. Shorter chunks would react faster, but multiply API calls. 
+- Client-side retries improve card quality without a second HTTP round-trip design, at the cost of worst-case latency when the model returns weak JSON. 
+- Older context is summarized heuristically rather than sent in full, which keeps prompts within limits but can drop nuance from early in a long session. It could be summarized using a smaller model or by asking LLM itself, but that would also increase latency. 
+- Suggestion quality checks run on the client as well as basic validation on the server, so the UI can degrade gracefully with a clear error if all attempts fail.
 
 ## User Interface
 
 ![twinMinds Copilot by Satvik](image.png)
-  Some details were added to the UI beyond the prototype to improve the user exprience for example:
+  Some details were added to the UI beyond the prototype to improve the user experience, for example:
 
-  # Latency Header
+  1. Latency Header
   ![Latency Header](image-1.png)
   The header bar records the last, median, and mean round-trip times over the ten most recent calls each for transcribe, suggest, and chat. Coarse progress indicators in each column reserve vertical space so status text does not shift the layout when states change.
 
-  # Progress Bars
+  2. Progress Bars
   ![Progress bars](image-2.png)
   The progress bars were added to the bottom of the page to show the time to render the transcription, suggestion cards and chats. The progress bars make the whole system feel more responsive. 
 
@@ -152,11 +148,17 @@ Suggestion quality checks run on the client as well as basic validation on the s
 
 | Path | Role |
 | --- | --- |
-| `frontend/src/App.jsx` | UI, mic loop, prompts, export, API orchestration |
-| `frontend/src/main.jsx` | React entry |
-| `frontend/src/styles.css` | Three-column layout and fixed status regions |
+| `frontend/src/App.jsx` | Main app UI, mic/transcription loop, suggestions/chat orchestration, settings, VAD handling |
+| `frontend/src/components/FixedStatus.jsx` | Reusable fixed-height status/progress component for each column |
+| `frontend/src/utils/appUtils.js` | Shared utility helpers (`median`, `mean`, `nowTime`, HTTP detail formatting) |
+| `frontend/src/main.jsx` | React entry point |
+| `frontend/src/styles.css` | Layout, theming, modal/chat styling, status/progress visuals |
 | `frontend/vite.config.js` | Vite configuration |
-| `backend/main.py` | `/transcribe`, `/suggest`, `/chat` routes and Groq integration |
+| `backend/main.py` | FastAPI app with `/transcribe`, `/suggest`, `/chat`, CORS origin handling |
+| `backend/requirements.txt` | Runtime Python dependencies |
+| `backend/requirements-dev.txt` | Dev/test dependencies (`pytest`, `httpx`) |
+| `backend/tests/test_main.py` | Backend tests for parsing/quality validation, CORS config, `/suggest` route |
+| `README.md` | Setup, deployment, behavior, prompt strategy, and architecture diagrams |
 
 ## Diagrams
 

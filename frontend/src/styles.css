@@ -329,6 +329,22 @@ body {
   white-space: pre-wrap;
 }
 
+.bot h2,
+.bot h3,
+.bot h4 {
+  margin: 6px 0;
+  color: #dbeafe;
+}
+
+.bot ul {
+  margin: 8px 0 8px 16px;
+  padding: 0;
+}
+
+.bot li {
+  margin-bottom: 4px;
+}
+
 .chat-row {
   display: flex;
   gap: 8px;
@@ -379,6 +395,24 @@ body {
 
 .modal-card h3 {
   margin-top: 0;
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-close {
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #cbd5e1;
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
 }
 
 .modal-card label {

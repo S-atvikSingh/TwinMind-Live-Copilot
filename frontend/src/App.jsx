@@ -6,6 +6,8 @@ import { formatHttpDetail, mean, median, nowTime } from "./utils/appUtils";
 // In hosted environments (Vercel), set VITE_API_BASE at build time.
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
 const CHUNK_MS = 30000;
+const VAD_RMS_THRESHOLD = 0.012;
+const VAD_VOICED_FRAME_RATIO = 0.06;
 
 const DEFAULT_SETTINGS = {
   tm_sugg_prompt:
@@ -147,7 +149,9 @@ export default function App() {
   const cycleTickerRef = useRef(null);
   const transcribeTickerRef = useRef(null);
   const transcriptAreaRef = useRef(null);
+  const chatAreaRef = useRef(null);
   const fullTranscriptRef = useRef("");
+  const audioContextRef = useRef(null);
 
   useEffect(() => {
     const loaded = {};
@@ -166,6 +170,16 @@ export default function App() {
     transcriptAreaRef.current.scrollTop = transcriptAreaRef.current.scrollHeight;
   }, [transcriptChunks.length]);
 
+  useEffect(() => {
+    if (!chatAreaRef.current) return;
+    // Auto-scroll only when user is already near the bottom.
+    const el = chatAreaRef.current;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distanceFromBottom <= 120) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [chatHistory]);
+
   useEffect(
     () => () => {
       stopRecordingInternal();
@@ -176,6 +190,29 @@ export default function App() {
   useEffect(() => {
     isRecordingRef.current = isRecording;
   }, [isRecording]);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setSettingsOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [settingsOpen]);
+
+  useEffect(() => {
+    const onBeforeUnload = (event) => {
+      const hasSessionData =
+        transcriptChunks.length > 0 || suggestionBatches.length > 0 || chatHistory.length > 0 || fullTranscript.trim().length > 0;
+      if (!hasSessionData) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [transcriptChunks.length, suggestionBatches.length, chatHistory.length, fullTranscript]);
 
   function updateStatus(column, type, message) {
     setColumnStatus((s) => ({ ...s, [column]: { type, message } }));
@@ -291,6 +328,86 @@ export default function App() {
     clearInterval(transcribeTickerRef.current);
   }
 
+  async function isChunkLikelySilent(blob) {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return false;
+      if (!audioContextRef.current) audioContextRef.current = new Ctx();
+      const ctx = audioContextRef.current;
+      const arrBuf = await blob.arrayBuffer();
+      const audioBuf = await ctx.decodeAudioData(arrBuf.slice(0));
+      const data = audioBuf.getChannelData(0);
+      const frameSize = 2048;
+      let voicedFrames = 0;
+      let totalFrames = 0;
+      for (let i = 0; i < data.length; i += frameSize) {
+        const end = Math.min(i + frameSize, data.length);
+        let sum = 0;
+        for (let j = i; j < end; j += 1) sum += data[j] * data[j];
+        const rms = Math.sqrt(sum / (end - i || 1));
+        if (rms >= VAD_RMS_THRESHOLD) voicedFrames += 1;
+        totalFrames += 1;
+      }
+      if (!totalFrames) return true;
+      return voicedFrames / totalFrames < VAD_VOICED_FRAME_RATIO;
+    } catch {
+      // If decoding fails, fall back to server transcription behavior.
+      return false;
+    }
+  }
+
+  function appendSilentChunkAndHints() {
+    const ts = nowTime();
+    const text = "[No audible speech detected in this 30s chunk]";
+    const merged = `${fullTranscriptRef.current} ${text}`.trim();
+    fullTranscriptRef.current = merged;
+    setFullTranscript(merged);
+    setTranscriptChunks((prev) => [...prev, { timestamp: ts, text }]);
+    const hints = [
+      {
+        type: "clarify",
+        title: "No speech captured",
+        preview: "No audio was detected this cycle, so suggestions are paused until speech resumes.",
+        reason: "Chunk marked silent by client-side VAD."
+      },
+      {
+        type: "talking_point",
+        title: "Mic check tips",
+        preview: "Move closer to the mic, reduce background noise, and verify browser microphone permissions.",
+        reason: "Helps recover from repeated silent chunks."
+      },
+      {
+        type: "ask_question",
+        title: "Resume when ready",
+        preview: "Start speaking naturally; the next 30s chunk will be transcribed and suggestions will refresh automatically.",
+        reason: "Keeps the user informed without disrupting chunk timing."
+      }
+    ];
+    setSuggestionBatches((prev) => [
+      { batchNumber: prev.length + 1, timestamp: new Date().toISOString(), suggestions: hints },
+      ...prev
+    ]);
+    updateStatus("transcript", "idle", "No audio detected for 30s.");
+    updateStatus("suggestions", "idle", "Suggestions paused until speech is detected.");
+    appendPromptLog({ endpoint: "transcribe", ok: true, note: "silent chunk skipped by Voice Actity Detection logic" });
+  }
+
+  function renderAssistantText(text) {
+    const escaped = String(text || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+    return escaped
+      .replace(/^### (.*)$/gm, "<h4>$1</h4>")
+      .replace(/^## (.*)$/gm, "<h3>$1</h3>")
+      .replace(/^# (.*)$/gm, "<h2>$1</h2>")
+      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.*?)\*/g, "<em>$1</em>")
+      .replace(/^- (.*)$/gm, "<li>$1</li>")
+      .replace(/(<li>.*<\/li>)/gs, "<ul>$1</ul>")
+      .replace(/\n/g, "<br />");
+  }
+
   async function postForm(url, formData) {
   // Normalize backend validation/auth errors into a single readable message path.
     const res = await fetch(url, { method: "POST", body: formData });
@@ -334,6 +451,10 @@ export default function App() {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
+    if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
   }
 
   function stopRecording() {
@@ -374,7 +495,13 @@ export default function App() {
     scheduleNextCycle();
 
     if (!chunkBlob.size) {
-      updateStatus("transcript", "idle", "No speech detected in latest 30s chunk.");
+      appendSilentChunkAndHints();
+      return;
+    }
+
+    const isSilent = await isChunkLikelySilent(chunkBlob);
+    if (isSilent) {
+      appendSilentChunkAndHints();
       return;
     }
 
@@ -523,6 +650,7 @@ export default function App() {
       `Use recent transcript (last ${win.lastN} chars).`,
       `Recency boost (highest priority): ${win.recencyBoost}`,
       win.olderSummary ? `Older context summary:\n${win.olderSummary}` : "",
+      "Formatting rules: avoid markdown tables and pipes. Use short headings and bullet points.",
       meta
     ]
       .filter(Boolean)
@@ -721,11 +849,11 @@ export default function App() {
             <h2>3. Chat (Detailed Answers)</h2>
             <span>session-only</span>
           </div>
-          <div className="scroll">
+          <div className="scroll" ref={chatAreaRef}>
             {chatHistory.map((m, i) => (
               <div key={`${m.timestamp}-${i}`} className="chat-pair">
                 <div className="you">{m.displayTitle || m.user}</div>
-                <div className="bot">{m.assistant}</div>
+                  <div className="bot" dangerouslySetInnerHTML={{ __html: renderAssistantText(m.assistant) }} />
               </div>
             ))}
           </div>
@@ -752,7 +880,12 @@ export default function App() {
       {settingsOpen && (
         <div className="modal">
           <div className="modal-card">
-            <h3>Settings</h3>
+            <div className="modal-head">
+              <h3>Settings</h3>
+              <button className="modal-close" onClick={() => setSettingsOpen(false)} aria-label="Close settings">
+                ×
+              </button>
+            </div>
             <label>Groq API Key</label>
             <input type="password" value={settings.tm_key || ""} onChange={(e) => setSettings((s) => ({ ...s, tm_key: e.target.value }))} />
 

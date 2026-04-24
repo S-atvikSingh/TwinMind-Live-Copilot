@@ -8,7 +8,7 @@ Frontend (Vercel): [twin-mind-live-copilot-satvik.vercel.app](https://twin-mind-
 
 Backend (Render): [https://twinmind-live-copilot.onrender.com](https://twinmind-live-copilot.onrender.com)
 
-**IMPORTANT: The backend is located on the free tier of Render so it takes 60-90 seconds to start after mic button is clicked and audio is detected. Please wait for the required time before using the program.**
+**IMPORTANT: The backend is located on the free tier of Render so it takes 60-90 seconds to start after mic button is clicked and audio is detected. Please wait for the required time after audio is detected before using the app.**
 
 ## Stack
 
